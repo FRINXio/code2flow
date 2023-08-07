@@ -2,23 +2,7 @@ import ast
 import contextlib
 import os
 
-from model import Call
-from model import Function
-from model import Group
-from model import GroupType
-from model import OwnerConst
-
-
-def flatten(list_of_lists: list[list[any]]) -> list[any]:
-    """Return a list from a list of lists."""
-    return [el for sublist in list_of_lists for el in sublist]
-
-
-def djoin(*tup):
-    """Convenience method to join strings with dots."""
-    if len(tup) == 1 and isinstance(tup[0], list):
-        return ".".join(tup[0])
-    return ".".join(tup)
+from code2flow.model import Call, Function, Group, GroupType, OwnerConst, djoin
 
 
 def make_file_group(file_ast: ast.Module, filename: str) -> Group:

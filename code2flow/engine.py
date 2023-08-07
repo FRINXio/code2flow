@@ -5,12 +5,11 @@ import logging
 import os
 from collections import defaultdict
 
-from code2flow import ast_util
-from model import CallConnection
-from model import Function
-from model import Group
+from code2flow.ast_util import find_links, get_ast, make_file_group
+from code2flow.model import CallConnection, Function, Group, flatten
 
 logger = logging.getLogger()
+
 
 def get_source_files(paths: list[str]) -> list[str]:
     """Filter and return only Python source files from given list of files or
@@ -58,7 +57,7 @@ def get_asts(source_files: list[str], skip_parse_errors: bool = False) -> list[(
     logger.info("Reading/parsing AST for each Python file.")
     for source_file in source_files:
         try:
-            asts.append((source_file, ast_util.get_ast(source_file)))
+            asts.append((source_file, get_ast(source_file)))
         except Exception as e:
             if skip_parse_errors:
                 logger.warning(f"Could not parse {source_file}. Skipping it.")
@@ -80,7 +79,7 @@ def find_groups_and_functions(asts: list[(str, ast.Module)]) -> list[Group]:
     logger.info("Finding groups and functions in ASTs...")
     file_groups = []
     for source_file, file_ast in asts:
-        file_group = ast_util.make_file_group(file_ast, source_file)
+        file_group = make_file_group(file_ast, source_file)
         file_groups.append(file_group)
     return file_groups
 
@@ -108,10 +107,10 @@ def find_all_connections(groups: list[Group]) -> list[CallConnection]:
         list[CallConnection]: List of CallConnections.
     """
     logger.info("Finding all connections between functions...")
-    all_functions = ast_util.flatten([g.get_all_functions() for g in groups])
+    all_functions = flatten([g.get_all_functions() for g in groups])
     connections = []
     for function_a in list(all_functions):
-        links = ast_util.find_links(function_a, all_functions)
+        links = find_links(function_a, all_functions)
         connections.extend(
             _create_call_connection(function_a, function_b) for function_b, _ in links if function_b
         )

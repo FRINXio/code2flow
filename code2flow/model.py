@@ -1,6 +1,16 @@
 from enum import StrEnum
 
-from code2flow import ast_util
+
+def flatten(list_of_lists: list[list[any]]) -> list[any]:
+    """Return a list from a list of lists."""
+    return [el for sublist in list_of_lists for el in sublist]
+
+
+def djoin(*tup):
+    """Convenience method to join strings with dots."""
+    if len(tup) == 1 and isinstance(tup[0], list):
+        return ".".join(tup[0])
+    return ".".join(tup)
 
 
 class OwnerConst(StrEnum):
@@ -95,7 +105,7 @@ class Function:
     def get_token_with_ownership(self) -> str:
         """Return token which includes what group this is a part of."""
         if self.is_attr():
-            return ast_util.djoin(self.parent.token, self.token)
+            return djoin(self.parent.token, self.token)
         return self.token
 
     def is_task(self) -> bool:
@@ -109,7 +119,7 @@ class Function:
 
     def get_parent_filename(self):
         """Return parent filename."""
-        if self.parent.group_type == ast_util.GroupType.cls:
+        if self.parent.group_type == GroupType.cls:
             return self.parent.parent.token
         else:
             return self.parent.token
