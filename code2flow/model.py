@@ -104,18 +104,29 @@ class Function:
 
     def get_token_with_ownership(self) -> str:
         """Return token which includes what group this is a part of."""
-        if self.is_attr():
-            return djoin(self.parent.token, self.token)
-        return self.token
+        return djoin(self.parent.token, self.token) if self.is_attr() else self.token
 
-    def is_task(self) -> bool:
+    def is_task(self, all_tasks: set) -> bool:
         """Return whether this function is a task."""
-        parent_tasks = self.parent.tasks
-        if self.parent.group_type == GroupType.cls:
-            parent_tasks = self.parent.parent.tasks
-            if self.token not in ["execute", "provision", "reconcile", "purge"]:
-                return False
-        return (self.token in parent_tasks) or (self.parent.token in parent_tasks)
+        if self.parent.group_type == GroupType.cls and self.token not in [
+            "execute",
+            "provision",
+            "reconcile",
+            "purge",
+        ]:
+            return False
+        return (self.token in all_tasks) or (self.parent.token in all_tasks)
+
+    def is_special_task(self, all_tasks: set) -> bool:
+        """Return whether this function is a "special" task.
+
+        Special tasks are execute, provision, reconcile and purge.
+        """
+        if (
+            self.token in ["execute", "provision", "reconcile", "purge"]
+            and self.parent.group_type == GroupType.cls
+        ):
+            return self.parent.token in all_tasks
 
     def get_parent_filename(self):
         """Return parent filename."""

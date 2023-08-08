@@ -117,11 +117,14 @@ def find_all_connections(groups: list[Group]) -> list[CallConnection]:
     return connections
 
 
-def find_direct_tasks_calls(function_calls: list[CallConnection]) -> dict[str, defaultdict]:
+def find_direct_tasks_calls(
+    function_calls: list[CallConnection], all_tasks: set[str]
+) -> dict[str, defaultdict]:
     """Find direct (task_1 -> task_2) tasks calls.
 
     Args:
         function_calls (list[CallConnection]): List of all functions calls connections.
+        all_tasks (set[str]): All workflows tasks combined.
 
     Returns:
         dict[str, defaultdict]: Dictionary which contains direct
@@ -139,15 +142,20 @@ def find_direct_tasks_calls(function_calls: list[CallConnection]) -> dict[str, d
     """
     logger.info("Finding direct tasks calls...")
     result = {"direct_calls": defaultdict(list[str])}
-    for call in function_calls:
-        parent_filename = call.function_1.get_parent_filename()
-        if call.function_1.is_task() and call.function_2.is_task():
-            if str(call) not in result["direct_calls"][parent_filename]:
-                result["direct_calls"][parent_filename].append(str(call))
+    for connection in function_calls:
+        parent_filename = connection.function_1.get_parent_filename()
+        if (
+            connection.function_1.is_task(all_tasks)
+            and connection.function_2.is_task(all_tasks)
+            and str(connection) not in result["direct_calls"][parent_filename]
+        ):
+            result["direct_calls"][parent_filename].append(str(connection))
     return result
 
 
-def _find_connection(call: CallConnection, filtered_connections: list[CallConnection]):
+def _find_connection(
+    connection: CallConnection, filtered_connections: list[CallConnection], all_tasks: set[str]
+):
     """Find possible connection.
 
     Algorithm: If there is a connection between function_x1 -> function_x2
@@ -156,28 +164,33 @@ def _find_connection(call: CallConnection, filtered_connections: list[CallConnec
     function_y2.
 
     Args:
-        call (CallConnection): Connection between two functions.
+        connection (CallConnection): Connection between two functions.
         filtered_connections (list[CallConnection]): Connections in which one function is a task.
+        all_tasks (set[str]): All workflows tasks combined.
 
     Returns:
         (str, Function, Function): Tuple which contains parent group and functions
             which will be used to create a connection.
     """
-    if call.function_1.is_task():
-        for other_call in filtered_connections:
-            if call.function_2 is other_call.function_1:
-                parent_filename = call.function_1.get_parent_filename()
-                return parent_filename, call.function_1, other_call.function_2
+    if connection.function_1.is_task(all_tasks):
+        for other_connection in filtered_connections:
+            if connection.function_2 is other_connection.function_1:
+                parent_filename = connection.function_1.get_parent_filename()
+                return parent_filename, connection.function_1, other_connection.function_2
 
-    if call.function_2.is_task():
-        for other_call in filtered_connections:
-            if call.function_1 is other_call.function_2:
-                parent_filename = other_call.function_1.get_parent_filename()
-                return parent_filename, other_call.function_1, call.function_2
+    # function_1 -> function_2 [TASK] AND function_x -> function_1
+    # create function_x -> function_2 [TASK]
+    if connection.function_2.is_task(all_tasks):
+        for other_connection in filtered_connections:
+            if connection.function_1 is other_connection.function_2:
+                parent_filename = other_connection.function_1.get_parent_filename()
+                return parent_filename, other_connection.function_1, connection.function_2
     return None
 
 
-def find_possible_tasks_calls(function_calls: list[CallConnection]) -> dict[str, defaultdict]:
+def find_possible_tasks_calls(
+    function_calls: list[CallConnection], all_tasks: set[str]
+) -> dict[str, defaultdict]:
     """Find possible tasks calls.
 
     E.g.: If task_1 -> function_x and function_x -> task_2, then there is
@@ -185,6 +198,7 @@ def find_possible_tasks_calls(function_calls: list[CallConnection]) -> dict[str,
 
     Args:
         function_calls (list[CallConnection]): List of all functions calls connections.
+        all_tasks (set[str]): All workflows tasks combined.
 
     Returns:
         dict[str, defaultdict]: Dictionary which contains possible
@@ -204,14 +218,23 @@ def find_possible_tasks_calls(function_calls: list[CallConnection]) -> dict[str,
     possible_calls = {"possible_calls": defaultdict(list[str])}
 
     # filter function calls connections in which one function is a task
-    for call in function_calls:
-        if call.function_1.is_task() and call.function_2.is_task():
+    for connection in function_calls:
+        if connection.function_1.is_task(all_tasks) and connection.function_2.is_task(all_tasks):
             continue  # since we already have it  (find_direct_calls)
-        if call.function_1.is_task() or call.function_2.is_task():
-            filtered_connections.append(call)
+        if connection.function_1.is_task(all_tasks) or connection.function_2.is_task(all_tasks):
+            filtered_connections.append(connection)
 
-    for call in filtered_connections:
-        possible_connection = _find_connection(call, filtered_connections)
+    # case in which 2nd function is a "special" task (execute, provision, reconcile, purge)
+    for connection in filtered_connections:
+        if connection.function_2.is_special_task(all_tasks):
+            new_connection = _create_call_connection(connection.function_1, connection.function_2)
+            parent_file = connection.function_1.get_parent_filename()
+            if str(new_connection) not in possible_calls["possible_calls"][parent_file]:
+                possible_calls["possible_calls"][parent_file].append(str(new_connection))
+
+    # indirect calls via another function
+    for connection in filtered_connections:
+        possible_connection = _find_connection(connection, filtered_connections, all_tasks)
         if possible_connection is not None:
             parent_file, function_1, function_2 = possible_connection
             new_connection = _create_call_connection(function_1, function_2)
@@ -219,6 +242,25 @@ def find_possible_tasks_calls(function_calls: list[CallConnection]) -> dict[str,
                 possible_calls["possible_calls"][parent_file].append(str(new_connection))
 
     return possible_calls
+
+
+def get_all_tasks(groups: list[Group]) -> set[str]:
+    """Iterate all groups and return all tasks which were found. Task is either
+    name of function (e.g. provision_export_route_policy) or class name (e.g.
+    ClearUniconfigUrlCache).
+
+    Args:
+        groups (list[Group]): List of all groups.
+
+    Returns:
+        set[str]: Set of all workflows tasks.
+    """
+    tasks = set()
+    for group in groups:
+        tasks.update(group.tasks)
+    if None in tasks:
+        tasks.remove(None)
+    return tasks
 
 
 def tasks_calls_finder(paths: list[str], skip_parse_errors: bool = False) -> dict[str, defaultdict]:
@@ -255,12 +297,14 @@ def tasks_calls_finder(paths: list[str], skip_parse_errors: bool = False) -> dic
     ast_trees = get_asts(python_source_files, skip_parse_errors)
     # Get file groups (files and classes) and functions
     file_groups = find_groups_and_functions(ast_trees)
+    # Get all workflows tasks from groups
+    all_tasks = get_all_tasks(file_groups)
     # Get all connections between functions calls
     calls_connections = find_all_connections(file_groups)
     # Get direct tasks calls
-    direct_calls = dict(find_direct_tasks_calls(calls_connections))
+    direct_calls = dict(find_direct_tasks_calls(calls_connections, all_tasks))
     # Get possible tasks calls
-    possible_calls = dict(find_possible_tasks_calls(calls_connections))
+    possible_calls = dict(find_possible_tasks_calls(calls_connections, all_tasks))
 
     return direct_calls | possible_calls
 
@@ -268,7 +312,7 @@ def tasks_calls_finder(paths: list[str], skip_parse_errors: bool = False) -> dic
 def main():
     parser = argparse.ArgumentParser(
         prog="frinxio-code2flow",
-        description="CMD tool to find workflow tasks which call each other."
+        description="CMD tool to find workflow tasks which call each other.",
     )
     parser.add_argument("paths", help="Files or directories to search in.", nargs="+")
     parser.add_argument("--quiet", "-q", help="Supress INFO logging.", action="store_true")

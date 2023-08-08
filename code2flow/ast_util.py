@@ -172,11 +172,9 @@ def _find_task_function_name(element: ast.Call, element_func: ast.Attribute):
         # E.g: xxx.register(cc)
         if len(element.args) == 1:
             arg_id = getattr(element.args[0], "id", None)
-            if arg_id == "cc" or arg_id == "conductor":
+            if arg_id in ["cc", "conductor"]:
                 # Class name is added in this case
                 result_name = getattr(element_func.value, "id", None)
-        # Tasks written in "old-style"
-        # E.g: cc.register(task_name, task_data, executor, ...)
         else:
             result_name = getattr(element.args[2], "id", None)
         return result_name
@@ -266,13 +264,12 @@ def find_link_for_call(call: Call, function_a: Function, all_functions: list[Fun
             if function.parent.group_type == GroupType.cls:
                 if call.token == function.token and call.call_from == function.parent.token:
                     possible_functions.append(function)
-            else:
-                if (
-                    call.token == function.token
-                    and function.parent != function_a.get_group()
-                    and call.call_from == function.parent.token
-                ):
-                    possible_functions.append(function)
+            elif (
+                call.token == function.token
+                and function.parent != function_a.get_group()
+                and call.call_from == function.parent.token
+            ):
+                possible_functions.append(function)
     else:
         for function in all_functions:
             if (
