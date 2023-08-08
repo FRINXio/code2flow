@@ -267,7 +267,8 @@ def tasks_calls_finder(paths: list[str], skip_parse_errors: bool = False) -> dic
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="Tasks calls finder", description="Tool to find tasks which call other tasks."
+        prog="frinxio-code2flow",
+        description="CMD tool to find workflow tasks which call each other."
     )
     parser.add_argument("paths", help="Files or directories to search in.", nargs="+")
     parser.add_argument("--quiet", "-q", help="Supress INFO logging.", action="store_true")

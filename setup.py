@@ -1,30 +1,14 @@
 from setuptools import setup
 
-VERSION = "2.5.1"
-url_base = "https://github.com/scottrogowski/code2flow"
-download_url = "%s/archive/code2flow-%s.tar.gz" % (url_base, VERSION)
-
 setup(
-    name="code2flow",
-    version=VERSION,
-    description="Visualize your source code as DOT flowcharts",
-    long_description=open("README.md", encoding="utf-8").read(),
-    long_description_content_type="text/markdown",
-    entry_points={
-        "console_scripts": ["code2flow=code2flow.engine:main"],
-    },
+    name='frinxio-code2flow',
+    version='0.1.0',
+    url='https://github.com/FRINXio/code2flow.git',
     license="MIT",
-    author="Scott Rogowski",
-    author_email="scottmrogowski@gmail.com",
-    url=url_base,
-    download_url=download_url,
+    description="CMD tool to find workflow tasks which call each other.",
+    long_description=open("README.md", encoding="utf-8").read(),
+    entry_points={
+        "console_scripts": ["frinxio-code2flow=code2flow.engine:main"],
+    },
     packages=["code2flow"],
-    python_requires=">=3.6",
-    include_package_data=True,
-    classifiers=[
-        "Natural Language :: English",
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ],
 )
